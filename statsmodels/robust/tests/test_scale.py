@@ -565,3 +565,46 @@ def test_scale_trimmed_distarge():
     assert_allclose(res_distr.scale, res.scale)
     res_distargs = scale.scale_trimmed(x, alpha, distargs=())
     assert_allclose(res_distargs.scale, res.scale)
+
+
+@pytest.mark.parametrize("nobs, alpha", [(2, 0.3), (4, 0.2), (5, 0.1), (9, 0.1)])
+def test_scale_trimmed_no_obs_trimmed(nobs, alpha):
+    # floor(nobs * alpha) is zero, so no observation is trimmed and the
+    # estimate must use the complete sample, not an empty trimmed sample
+    x = np.linspace(1, 2, nobs)
+    res = scale.scale_trimmed(x, alpha, distr="raw")
+
+    assert res.trim_idx == 0
+    assert_allclose(res.center, np.median(x), rtol=1e-13)
+    expected = np.sqrt(((x - np.median(x)) ** 2).sum() / nobs)
+    assert expected > 0
+    assert_allclose(res.scale, expected, rtol=1e-13)
+
+    # 'tmean' is the mean of the trimmed sample, which is the full sample here
+    res_tmean = scale.scale_trimmed(x, alpha, center="tmean", distr="raw")
+    assert_allclose(res_tmean.center, x.mean(), rtol=1e-13)
+    assert_allclose(res_tmean.scale, expected, rtol=1e-13)
+
+    # the normalization to the reference distribution is still applied
+    res_norm = scale.scale_trimmed(x, alpha)
+    assert res_norm.scale > 0
+    assert_allclose(
+        res_norm.scale, res.scale * np.sqrt(res_norm.scale_correction), rtol=1e-13
+    )
+
+
+def test_scale_trimmed_no_obs_trimmed_axis():
+    x = np.arange(1.0, 11.0).reshape(5, 2)
+    res = scale.scale_trimmed(x, 0.1, distr="raw")
+
+    assert res.trim_idx == 0
+    expected = np.sqrt(((x - np.median(x, axis=0)) ** 2).sum(axis=0) / x.shape[0])
+    assert_allclose(res.scale, expected, rtol=1e-13)
+
+
+@pytest.mark.parametrize("nobs, alpha", [(2, 0.5), (4, 0.5), (10, 0.6)])
+def test_scale_trimmed_all_obs_trimmed(nobs, alpha):
+    # all observations would be trimmed, the trimmed sample is empty
+    x = np.arange(1.0, nobs + 1)
+    with pytest.raises(ValueError, match="no observations are left"):
+        scale.scale_trimmed(x, alpha)

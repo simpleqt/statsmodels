@@ -595,7 +595,8 @@ def scale_trimmed(data, alpha, center="median", axis=0, distr=None, distargs=Non
         Trimming fraction in each tail. The floor(nobs * alpha) smallest
         observations are trimmed, and the same number of the largest
         observations are trimmed. scale estimate is base on a fraction
-        (1 - 2 * alpha) of observations.
+        (1 - 2 * alpha) of observations. If floor(nobs * alpha) is zero,
+        no observations are trimmed and the complete sample is used.
     center : {"median", "med", "mean", "tmean"} or array_like, optional
         `center` defines how the trimmed sample is centered. 'median' (or
         the alias 'med') and 'mean' are calculated on the full sample.
@@ -618,6 +619,13 @@ def scale_trimmed(data, alpha, center="median", axis=0, distr=None, distargs=Non
     ScaleTrimmedResult
         See :class:`ScaleTrimmedResult` for a description of the
         attributes.
+
+    Raises
+    ------
+    ValueError
+        If `alpha` is so large relative to nobs that no observations are
+        left after trimming, i.e. if ``floor(nobs * alpha)`` is greater than
+        or equal to ``nobs - floor(nobs * alpha)``.
 
     Examples
     --------
@@ -661,9 +669,13 @@ def scale_trimmed(data, alpha, center="median", axis=0, distr=None, distargs=Non
         c_inv = distr.expect(lambda x: x * x, lb=-bound, ub=bound, args=distargs)
 
     cut_idx = np.floor(nobs * alpha).astype(int)
+    upper_idx = nobs - cut_idx
+    if cut_idx >= upper_idx:
+        raise ValueError(
+            "alpha is too large, no observations are left after trimming"
+        )
     sl = [slice(None, None, None)] * x.ndim
-    sl[axis] = slice(cut_idx, -cut_idx)
-    # x_trimmed = x[cut_idx:-cut_idx]
+    sl[axis] = slice(cut_idx, upper_idx)
     # cut in axis
     x_trimmed = x[tuple(sl)]
 
